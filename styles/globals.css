@@ -1,0 +1,43 @@
+const nodemailer = require('nodemailer');
+
+function getTransport() {
+  const service = process.env.EMAIL_SERVICE || 'console';
+
+  if (service === 'console') {
+    return null;
+  }
+
+  return nodemailer.createTransport({
+    host: process.env.SMTP_HOST || 'localhost',
+    port: Number(process.env.SMTP_PORT || 1025),
+    secure: false,
+    auth: {
+      user: process.env.SMTP_USER || '',
+      pass: process.env.SMTP_PASS || '',
+    },
+  });
+}
+
+async function sendBookingConfirmation(booking) {
+  const transport = getTransport();
+  const from = process.env.SMTP_FROM || 'bookings@inkandbonestudio.com';
+  const subject = `Booking confirmation for ${booking.service_type} appointment`;
+  const text = `Hi ${booking.client_name},\n\nYour tattoo appointment has been booked for ${booking.booking_date} at ${booking.booking_time}.\nService: ${booking.service_type}\nDesign idea: ${booking.design_idea || 'Not provided'}\n\nWe look forward to seeing you!`;
+
+  if (!transport) {
+    console.log('Email confirmation skipped. SMTP not configured.');
+    console.log({ to: booking.client_email, subject, text });
+    return { success: true, mocked: true };
+  }
+
+  await transport.sendMail({
+    from,
+    to: booking.client_email,
+    subject,
+    text,
+  });
+
+  return { success: true, mocked: false };
+}
+
+module.exports = { sendBookingConfirmation };
