@@ -1,0 +1,320 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DATABASE_URL_UNPOOLED")
+}
+
+enum Role {
+  ADMIN
+  ARTIST
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  DEPOSIT_REQUIRED
+  DEPOSIT_PAID
+  COMPLETED
+  CANCELLED
+  REJECTED
+}
+
+enum ColorMode {
+  BLACK_GREY
+  COLOR
+  BOTH
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  EXPIRED
+  REFUNDED
+}
+
+enum DepositType {
+  NONE
+  FIXED
+  PERCENTAGE
+}
+
+enum BlockType {
+  DAY_OFF
+  VACATION
+  HOLIDAY
+}
+
+enum NotificationType {
+  BOOKING_SUBMITTED
+  BOOKING_CONFIRMED
+  BOOKING_REJECTED
+  BOOKING_RESCHEDULED
+  DEPOSIT_REQUESTED
+  DEPOSIT_RECEIVED
+  BOOKING_CANCELLED
+  ADMIN_NEW_BOOKING
+}
+
+enum NotificationStatus {
+  SENT
+  FAILED
+  SKIPPED
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  role         Role     @default(ADMIN)
+  active       Boolean  @default(true)
+  artist       Artist?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Artist {
+  id           String         @id @default(cuid())
+  slug         String         @unique
+  name         String
+  title        String         @default("Tattoo Artist")
+  bio          String
+  photoUrl     String?
+  specialties  String[]
+  instagram    String?
+  yearsExp     Int            @default(0)
+  sortOrder    Int            @default(0)
+  active       Boolean        @default(true)
+  isDemo       Boolean        @default(false)
+  userId       String?        @unique
+  user         User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+  portfolio    Portfolio[]
+  bookings     Booking[]
+  availability Availability[]
+  blockedDates BlockedDate[]
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@index([active, sortOrder])
+}
+
+model Customer {
+  id        String    @id @default(cuid())
+  email     String    @unique
+  name      String
+  phone     String
+  notes     String?
+  isDemo    Boolean   @default(false)
+  bookings  Booking[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([name])
+}
+
+model Service {
+  id              String    @id @default(cuid())
+  slug            String    @unique
+  name            String
+  description     String
+  priceFrom       Int
+  priceTo         Int?
+  durationMinutes Int
+  icon            String    @default("pen-tool")
+  sortOrder       Int       @default(0)
+  active          Boolean   @default(true)
+  isDemo          Boolean   @default(false)
+  bookings        Booking[]
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([active, sortOrder])
+}
+
+model Booking {
+  id              String         @id @default(cuid())
+  reference       String         @unique
+  status          BookingStatus  @default(PENDING)
+  customerId      String
+  customer        Customer       @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  artistId        String
+  artist          Artist         @relation(fields: [artistId], references: [id], onDelete: Restrict)
+  serviceId       String?
+  service         Service?       @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  style           String
+  placement       String
+  size            String
+  colorMode       ColorMode
+  description     String
+  budget          String?
+  preferredDate   DateTime       @db.Date
+  alternativeDate DateTime?      @db.Date
+  preferredTime   String
+  startsAt        DateTime
+  endsAt          DateTime
+  referenceImages String[]
+  customerNotes   String?
+  adminNotes      String?
+  totalPrice      Int?
+  depositAmount   Int?
+  isDemo          Boolean        @default(false)
+  payments        Payment[]
+  notifications   Notification[]
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@index([status])
+  @@index([artistId, startsAt])
+  @@index([customerId])
+  @@index([startsAt])
+  @@index([createdAt])
+}
+
+model Payment {
+  id                    String        @id @default(cuid())
+  bookingId             String
+  booking               Booking       @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  amount                Int
+  currency              String
+  status                PaymentStatus @default(PENDING)
+  stripeSessionId       String?       @unique
+  stripePaymentIntentId String?
+  checkoutUrl           String?
+  paidAt                DateTime?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  @@index([bookingId])
+  @@index([status])
+}
+
+model Notification {
+  id        String             @id @default(cuid())
+  bookingId String?
+  booking   Booking?           @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  type      NotificationType
+  toEmail   String
+  subject   String
+  status    NotificationStatus
+  error     String?
+  createdAt DateTime           @default(now())
+
+  @@index([bookingId])
+  @@index([createdAt])
+}
+
+model PortfolioCategory {
+  id        String      @id @default(cuid())
+  slug      String      @unique
+  name      String      @unique
+  sortOrder Int         @default(0)
+  items     Portfolio[]
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+}
+
+model Portfolio {
+  id            String            @id @default(cuid())
+  slug          String            @unique
+  title         String
+  description   String
+  imageUrl      String
+  imagePublicId String?
+  categoryId    String
+  category      PortfolioCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  artistId      String
+  artist        Artist            @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  tags          String[]
+  featured      Boolean           @default(false)
+  published     Boolean           @default(true)
+  isDemo        Boolean           @default(false)
+  tattooedAt    DateTime          @default(now())
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  @@index([categoryId])
+  @@index([artistId])
+  @@index([published, featured])
+  @@index([tattooedAt])
+}
+
+model Availability {
+  id         String   @id @default(cuid())
+  artistId   String
+  artist     Artist   @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  dayOfWeek  Int
+  isWorking  Boolean  @default(true)
+  startTime  String
+  endTime    String
+  breakStart String?
+  breakEnd   String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([artistId, dayOfWeek])
+}
+
+model BlockedDate {
+  id        String    @id @default(cuid())
+  artistId  String?
+  artist    Artist?   @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  type      BlockType @default(DAY_OFF)
+  startDate DateTime  @db.Date
+  endDate   DateTime  @db.Date
+  reason    String?
+  createdAt DateTime  @default(now())
+
+  @@index([artistId])
+  @@index([startDate, endDate])
+}
+
+model Testimonial {
+  id        String   @id @default(cuid())
+  name      String
+  quote     String
+  rating    Int      @default(5)
+  detail    String?
+  published Boolean  @default(true)
+  isDemo    Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model SiteSettings {
+  id                     String      @id @default("default")
+  businessName           String
+  tagline                String
+  description            String
+  logoUrl                String?
+  email                  String
+  phone                  String
+  address                String
+  city                   String
+  mapEmbedUrl            String?
+  instagram              String?
+  facebook               String?
+  tiktok                 String?
+  twitter                String?
+  timezone               String      @default("America/New_York")
+  currency               String      @default("USD")
+  depositType            DepositType @default(FIXED)
+  depositAmount          Int         @default(10000)
+  slotIntervalMinutes    Int         @default(60)
+  defaultDurationMinutes Int         @default(120)
+  minNoticeHours         Int         @default(48)
+  maxAdvanceDays         Int         @default(120)
+  businessHours          Json
+  updatedAt              DateTime    @updatedAt
+}
+
+model RateLimitHit {
+  id        String   @id @default(cuid())
+  key       String
+  createdAt DateTime @default(now())
+
+  @@index([key, createdAt])
+}
